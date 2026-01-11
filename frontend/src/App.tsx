@@ -1,8 +1,31 @@
 import { useEffect, useState } from "react";
+import {
+  Search,
+  Plus,
+  Menu,
+  X,
+  Home,
+  Ticket,
+  Settings,
+  HelpCircle,
+} from "lucide-react";
 
 /*
-  Ticket type = what we receive from Flask (GET /api/tickets)
+  ============================================
+  PROFESSIONAL HELPDESK LAYOUT
+  ============================================
+  Based on real-world helpdesk applications like:
+  - Zendesk
+  - Freshdesk
+  - Intercom
+  
+  Key features:
+  - Sidebar navigation
+  - Clean table view for tickets
+  - Modal for creating new tickets
+  - Responsive design
 */
+
 type Ticket = {
   id: number;
   title: string;
@@ -13,267 +36,428 @@ type Ticket = {
   created_at: string;
 };
 
-/*
-  Small pill component for status
-*/
-function StatusPill({ text }: { text: string }) {
-  const base =
-    "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-black/5";
+type TicketFormData = {
+  title: string;
+  description: string;
+  category: string;
+  priority: string;
+};
 
-  if (text === "Resolved") {
-    return (
-      <span className={`${base} bg-emerald-100 text-emerald-800`}>{text}</span>
-    );
-  }
-  if (text === "In Progress") {
-    return <span className={`${base} bg-sky-100 text-sky-800`}>{text}</span>;
-  }
-  return <span className={`${base} bg-slate-100 text-slate-800`}>{text}</span>;
-}
-
-/*
-  Small pill component for priority
-*/
-function PriorityPill({ text }: { text: string }) {
-  const base =
-    "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-black/5";
-
-  if (text === "High") {
-    return <span className={`${base} bg-rose-100 text-rose-800`}>{text}</span>;
-  }
-  if (text === "Medium") {
-    return (
-      <span className={`${base} bg-amber-100 text-amber-800`}>{text}</span>
-    );
-  }
-  return <span className={`${base} bg-slate-100 text-slate-800`}>{text}</span>;
-}
-
-/*
-  Reusable “glass” card wrapper to match modern UI look
-*/
-function GlassCard({ children }: { children: React.ReactNode }) {
+// Status badge component
+function StatusBadge({ status }: { status: string }) {
+  const styles = {
+    Open: "bg-blue-100 text-blue-800",
+    "In Progress": "bg-amber-100 text-amber-800",
+    Resolved: "bg-emerald-100 text-emerald-800",
+  };
   return (
-    <div className="rounded-3xl bg-white/70 p-5 shadow-xl backdrop-blur-md ring-1 ring-black/5">
-      {children}
-    </div>
+    <span
+      className={`rounded-full px-3 py-1 text-xs font-medium ${
+        styles[status as keyof typeof styles]
+      }`}
+    >
+      {status}
+    </span>
+  );
+}
+
+// Priority badge component
+function PriorityBadge({ priority }: { priority: string }) {
+  const styles = {
+    Low: "bg-slate-100 text-slate-700",
+    Medium: "bg-orange-100 text-orange-700",
+    High: "bg-rose-100 text-rose-700",
+  };
+  return (
+    <span
+      className={`rounded-full px-3 py-1 text-xs font-medium ${
+        styles[priority as keyof typeof styles]
+      }`}
+    >
+      {priority}
+    </span>
   );
 }
 
 export default function App() {
-  // tickets list from backend
+  // State management
   const [tickets, setTickets] = useState<Ticket[]>([]);
-  // if backend fails, we show this
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState<TicketFormData>({
+    title: "",
+    description: "",
+    category: "Network",
+    priority: "Low",
+  });
 
-  // Load tickets once when page loads
-  useEffect(() => {
-    async function loadTickets() {
-      try {
-        const res = await fetch("/api/tickets");
-
-        if (!res.ok) {
-          setError("Failed to load tickets");
-          return;
-        }
-
-        const data = (await res.json()) as Ticket[];
-        setTickets(data);
-      } catch {
-        setError("Network error while loading tickets");
-      }
+  // Load tickets from backend
+  async function loadTickets() {
+    try {
+      const res = await fetch("/api/tickets");
+      if (!res.ok) throw new Error("Failed to load tickets");
+      const data = (await res.json()) as Ticket[];
+      setTickets(data);
+    } catch {
+      setError("Failed to load tickets");
     }
+  }
 
+  useEffect(() => {
     loadTickets();
   }, []);
 
+  // Handle form submission
+  async function handleSubmit() {
+    if (!formData.title.trim() || !formData.description.trim()) {
+      setError("Please fill in all required fields");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/tickets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) throw new Error("Failed to create ticket");
+
+      setSuccessMessage("Ticket created successfully!");
+      setFormData({
+        title: "",
+        description: "",
+        category: "Network",
+        priority: "Low",
+      });
+      setIsModalOpen(false);
+      await loadTickets();
+
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch {
+      setError("Failed to create ticket. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  // Filter tickets based on search
+  const filteredTickets = tickets.filter(
+    (t) =>
+      t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.description.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
-    // Soft gradient background (like Dribbble UI)
-    <div className="min-h-screen bg-gradient-to-br from-sky-200 via-indigo-200 to-emerald-200">
-      <div className="mx-auto max-w-6xl px-4 py-10">
-        {/* Header */}
-        <div className="mb-8 flex items-end justify-between">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">
-              Helpdesk
-            </h1>
-            <p className="text-slate-700">
-              Ticketing System{" "}
-              <span className="text-slate-500">(Flask + React)</span>
-            </p>
-          </div>
-
-          {/* Hide these buttons on very small screens */}
-          <div className="hidden sm:flex gap-2">
-            <button className="rounded-2xl bg-white/70 px-4 py-2 text-sm font-semibold text-slate-800 ring-1 ring-black/5 hover:bg-white">
-              Documentation
-            </button>
-            <button className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">
-              + New Ticket
-            </button>
-          </div>
-        </div>
-
-        {/* Responsive layout:
-            - mobile: 1 column
-            - tablet: 2 columns
-            - desktop: 3 columns
-        */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {/* LEFT: Ticket list */}
-          <GlassCard>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900">My tickets</h2>
-              <button className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800">
-                + New
-              </button>
-            </div>
-
-            <input
-              placeholder="Search tickets…"
-              className="mb-4 w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-400"
-            />
-
-            {/* Show error OR show tickets */}
-            {error ? (
-              <p className="text-sm text-rose-700">{error}</p>
-            ) : tickets.length === 0 ? (
-              <p className="text-sm text-slate-600">No tickets yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {tickets.map((t) => (
-                  <button
-                    key={t.id}
-                    className="w-full rounded-3xl border border-slate-200 bg-white/80 p-4 text-left transition hover:bg-white hover:shadow-md"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-bold text-slate-900">
-                          #{t.id} — {t.title}
-                        </p>
-                        <p className="mt-1 text-sm text-slate-700 line-clamp-2">
-                          {t.description}
-                        </p>
-                      </div>
-
-                      <div className="flex flex-col items-end gap-2">
-                        <StatusPill text={t.status} />
-                        <PriorityPill text={t.priority} />
-                      </div>
-                    </div>
-
-                    <div className="mt-3 text-xs text-slate-500">
-                      {t.category} • {t.created_at}
-                    </div>
-                  </button>
-                ))}
+    <div className="flex h-screen bg-slate-50">
+      {/* ========== SIDEBAR ========== */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-64 transform bg-white shadow-lg transition-transform lg:static lg:translate-x-0 ${
+          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex h-full flex-col">
+          {/* Logo */}
+          <div className="flex h-16 items-center justify-between border-b px-6">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+                <Ticket className="h-5 w-5 text-white" />
               </div>
-            )}
-
-            <button className="mt-5 w-full rounded-3xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow hover:bg-blue-700">
-              Create New Ticket
+              <span className="text-lg font-bold text-slate-900">Helpdesk</span>
+            </div>
+            <button
+              onClick={() => setIsSidebarOpen(false)}
+              className="lg:hidden"
+            >
+              <X className="h-5 w-5" />
             </button>
-          </GlassCard>
+          </div>
 
-          {/* MIDDLE: Help center */}
-          <GlassCard>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900">Help Center</h2>
-              <span className="text-slate-500">🔎</span>
+          {/* Navigation */}
+          <nav className="flex-1 space-y-1 p-4">
+            <button className="flex w-full items-center gap-3 rounded-lg bg-blue-50 px-4 py-3 text-blue-600 transition hover:bg-blue-100">
+              <Home className="h-5 w-5" />
+              <span className="font-medium">Dashboard</span>
+            </button>
+            <button className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-slate-600 transition hover:bg-slate-100">
+              <Ticket className="h-5 w-5" />
+              <span className="font-medium">All Tickets</span>
+            </button>
+            <button className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-slate-600 transition hover:bg-slate-100">
+              <HelpCircle className="h-5 w-5" />
+              <span className="font-medium">Help Center</span>
+            </button>
+            <button className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-slate-600 transition hover:bg-slate-100">
+              <Settings className="h-5 w-5" />
+              <span className="font-medium">Settings</span>
+            </button>
+          </nav>
+
+          {/* User profile */}
+          <div className="border-t p-4">
+            <div className="flex items-center gap-3 rounded-lg p-3 hover:bg-slate-100">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white font-semibold">
+                U
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-slate-900">User Name</p>
+                <p className="text-xs text-slate-500">user@example.com</p>
+              </div>
             </div>
+          </div>
+        </div>
+      </aside>
 
+      {/* ========== MAIN CONTENT ========== */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Header */}
+        <header className="flex h-16 items-center justify-between border-b bg-white px-6">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="lg:hidden"
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+            <h1 className="text-xl font-bold text-slate-900">
+              Support Tickets
+            </h1>
+          </div>
+
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4" />
+            New Ticket
+          </button>
+        </header>
+
+        {/* Success/Error Messages */}
+        {successMessage && (
+          <div className="mx-6 mt-4 rounded-lg bg-emerald-50 p-4 text-emerald-800 border border-emerald-200">
+            ✓ {successMessage}
+          </div>
+        )}
+        {error && (
+          <div className="mx-6 mt-4 rounded-lg bg-rose-50 p-4 text-rose-800 border border-rose-200">
+            ⚠ {error}
+          </div>
+        )}
+
+        {/* Search Bar */}
+        <div className="border-b bg-white px-6 py-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
             <input
-              placeholder="Search articles…"
-              className="mb-4 w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-400"
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search tickets..."
+              className="w-full rounded-lg border border-slate-200 py-2 pl-10 pr-4 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             />
+          </div>
+        </div>
 
-            <div className="space-y-3">
-              {[
-                {
-                  title: "Getting started",
-                  desc: "Learn how to create, track, and update tickets.",
-                },
-                {
-                  title: "Troubleshooting Wi-Fi",
-                  desc: "Common fixes for DNS, IP config, and router issues.",
-                },
-                {
-                  title: "Password resets",
-                  desc: "Steps to reset your account securely.",
-                },
-              ].map((a) => (
-                <div
-                  key={a.title}
-                  className="rounded-3xl border border-slate-200 bg-white/80 p-4 hover:bg-white"
-                >
-                  <p className="font-bold text-slate-900">{a.title}</p>
-                  <p className="mt-1 text-sm text-slate-700">{a.desc}</p>
-                </div>
-              ))}
-            </div>
+        {/* Tickets Table */}
+        <main className="flex-1 overflow-auto p-6">
+          <div className="overflow-hidden rounded-lg bg-white shadow">
+            <table className="w-full">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-600">
+                    ID
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-600">
+                    Title
+                  </th>
+                  <th className="hidden px-6 py-3 text-left text-xs font-semibold uppercase text-slate-600 md:table-cell">
+                    Category
+                  </th>
+                  <th className="hidden px-6 py-3 text-left text-xs font-semibold uppercase text-slate-600 sm:table-cell">
+                    Priority
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-600">
+                    Status
+                  </th>
+                  <th className="hidden px-6 py-3 text-left text-xs font-semibold uppercase text-slate-600 lg:table-cell">
+                    Created
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {filteredTickets.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-6 py-8 text-center text-slate-500"
+                    >
+                      {searchQuery ? "No tickets found" : "No tickets yet"}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredTickets.map((ticket) => (
+                    <tr
+                      key={ticket.id}
+                      className="hover:bg-slate-50 cursor-pointer"
+                    >
+                      <td className="px-6 py-4 text-sm font-medium text-slate-900">
+                        #{ticket.id}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="max-w-xs">
+                          <p className="font-medium text-slate-900">
+                            {ticket.title}
+                          </p>
+                          <p className="mt-1 line-clamp-1 text-sm text-slate-500">
+                            {ticket.description}
+                          </p>
+                        </div>
+                      </td>
+                      <td className="hidden px-6 py-4 text-sm text-slate-600 md:table-cell">
+                        {ticket.category}
+                      </td>
+                      <td className="hidden px-6 py-4 sm:table-cell">
+                        <PriorityBadge priority={ticket.priority} />
+                      </td>
+                      <td className="px-6 py-4">
+                        <StatusBadge status={ticket.status} />
+                      </td>
+                      <td className="hidden px-6 py-4 text-sm text-slate-600 lg:table-cell">
+                        {ticket.created_at}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </main>
+      </div>
 
-            <div className="mt-5 rounded-3xl bg-blue-600/10 p-5">
-              <p className="font-bold text-slate-900">Need help?</p>
-              <p className="mt-1 text-sm text-slate-700">
-                Create a ticket and our IT team will respond.
-              </p>
-              <button className="mt-4 rounded-3xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700">
-                Create Ticket
+      {/* ========== CREATE TICKET MODAL ========== */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b px-6 py-4">
+              <h2 className="text-lg font-bold text-slate-900">
+                Create New Ticket
+              </h2>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
               </button>
             </div>
-          </GlassCard>
 
-          {/* RIGHT: New ticket form (UI only for now) */}
-          <GlassCard>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900">New ticket</h2>
-              <span className="text-slate-500">🎧</span>
+            {/* Modal Body */}
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Category <span className="text-rose-600">*</span>
+                </label>
+                <select
+                  value={formData.category}
+                  onChange={(e) =>
+                    setFormData({ ...formData, category: e.target.value })
+                  }
+                  className="w-full rounded-lg border border-slate-200 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                >
+                  <option>Network</option>
+                  <option>Software</option>
+                  <option>Hardware</option>
+                  <option>Account</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Subject <span className="text-rose-600">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.title}
+                  onChange={(e) =>
+                    setFormData({ ...formData, title: e.target.value })
+                  }
+                  placeholder="Brief description of the issue"
+                  className="w-full rounded-lg border border-slate-200 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Description <span className="text-rose-600">*</span>
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                  placeholder="Provide detailed information about the issue"
+                  rows={4}
+                  className="w-full rounded-lg border border-slate-200 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Priority <span className="text-rose-600">*</span>
+                </label>
+                <div className="flex gap-2">
+                  {["Low", "Medium", "High"].map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setFormData({ ...formData, priority: p })}
+                      className={`flex-1 rounded-lg border px-4 py-2 text-sm font-medium transition ${
+                        formData.priority === p
+                          ? "border-blue-600 bg-blue-50 text-blue-600"
+                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <label className="text-sm font-semibold text-slate-800">
-              Category
-            </label>
-            <select className="mt-1 w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-400">
-              <option>Network</option>
-              <option>Software</option>
-              <option>Hardware</option>
-              <option>Account</option>
-            </select>
-
-            <label className="mt-4 block text-sm font-semibold text-slate-800">
-              Subject
-            </label>
-            <input
-              placeholder="E.g., Wi-Fi keeps disconnecting"
-              className="mt-1 w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-400"
-            />
-
-            <label className="mt-4 block text-sm font-semibold text-slate-800">
-              Describe your issue
-            </label>
-            <textarea
-              placeholder="Include what you tried already, and any error messages."
-              className="mt-1 w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-400"
-              rows={5}
-            />
-
-            <div className="mt-4 rounded-3xl border border-dashed border-slate-300 bg-white/60 p-5 text-center text-sm text-slate-700">
-              Add screenshot / file (max 10MB)
+            {/* Modal Footer */}
+            <div className="flex gap-3 border-t px-6 py-4">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="flex-1 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isSubmitting ? "Creating..." : "Create Ticket"}
+              </button>
             </div>
-
-            <div className="mt-4 flex items-center justify-between">
-              <span className="text-sm font-semibold text-slate-800">
-                Mark as urgent
-              </span>
-              <input type="checkbox" className="h-5 w-5" />
-            </div>
-
-            <button className="mt-6 w-full rounded-3xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow hover:bg-blue-700">
-              Submit Ticket
-            </button>
-          </GlassCard>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Mobile sidebar overlay */}
+      {isSidebarOpen && (
+        <div
+          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+        />
+      )}
     </div>
   );
 }
