@@ -1,14 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  Search,
-  Plus,
-  Menu,
-  X,
-  Home,
-  Ticket,
-  Settings,
-  HelpCircle,
-} from "lucide-react";
+import { Search, Plus, Menu, X, Home, Ticket, Settings, HelpCircle } from "lucide-react";
 
 /*
   ============================================
@@ -51,11 +42,7 @@ function StatusBadge({ status }: { status: string }) {
     Resolved: "bg-emerald-100 text-emerald-800",
   };
   return (
-    <span
-      className={`rounded-full px-3 py-1 text-xs font-medium ${
-        styles[status as keyof typeof styles]
-      }`}
-    >
+    <span className={`rounded-full px-3 py-1 text-xs font-medium ${styles[status as keyof typeof styles]}`}>
       {status}
     </span>
   );
@@ -69,11 +56,7 @@ function PriorityBadge({ priority }: { priority: string }) {
     High: "bg-rose-100 text-rose-700",
   };
   return (
-    <span
-      className={`rounded-full px-3 py-1 text-xs font-medium ${
-        styles[priority as keyof typeof styles]
-      }`}
-    >
+    <span className={`rounded-full px-3 py-1 text-xs font-medium ${styles[priority as keyof typeof styles]}`}>
       {priority}
     </span>
   );
@@ -88,6 +71,11 @@ export default function App() {
   const [successMessage, setSuccessMessage] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // NEW: Track selected ticket for detail view
+  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  
   const [formData, setFormData] = useState<TicketFormData>({
     title: "",
     description: "",
@@ -148,6 +136,40 @@ export default function App() {
     }
   }
 
+  // NEW: Update ticket status
+  async function updateTicketStatus(ticketId: number, newStatus: string) {
+    setIsUpdatingStatus(true);
+    setError("");
+
+    try {
+      // Send PATCH request to backend
+      const response = await fetch(`/api/tickets/${ticketId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (!response.ok) throw new Error("Failed to update status");
+
+      // Show success message
+      setSuccessMessage("Status updated successfully!");
+
+      // Reload tickets to get updated data
+      await loadTickets();
+
+      // Update the selected ticket's status
+      if (selectedTicket) {
+        setSelectedTicket({ ...selectedTicket, status: newStatus });
+      }
+
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch {
+      setError("Failed to update status. Please try again.");
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  }
+
   // Filter tickets based on search
   const filteredTickets = tickets.filter(
     (t) =>
@@ -172,10 +194,7 @@ export default function App() {
               </div>
               <span className="text-lg font-bold text-slate-900">Helpdesk</span>
             </div>
-            <button
-              onClick={() => setIsSidebarOpen(false)}
-              className="lg:hidden"
-            >
+            <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden">
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -220,15 +239,10 @@ export default function App() {
         {/* Header */}
         <header className="flex h-16 items-center justify-between border-b bg-white px-6">
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => setIsSidebarOpen(true)}
-              className="lg:hidden"
-            >
+            <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden">
               <Menu className="h-6 w-6" />
             </button>
-            <h1 className="text-xl font-bold text-slate-900">
-              Support Tickets
-            </h1>
+            <h1 className="text-xl font-bold text-slate-900">Support Tickets</h1>
           </div>
 
           <button
@@ -295,17 +309,15 @@ export default function App() {
               <tbody className="divide-y divide-slate-200">
                 {filteredTickets.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={6}
-                      className="px-6 py-8 text-center text-slate-500"
-                    >
+                    <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
                       {searchQuery ? "No tickets found" : "No tickets yet"}
                     </td>
                   </tr>
                 ) : (
                   filteredTickets.map((ticket) => (
-                    <tr
-                      key={ticket.id}
+                    <tr 
+                      key={ticket.id} 
+                      onClick={() => setSelectedTicket(ticket)}
                       className="hover:bg-slate-50 cursor-pointer"
                     >
                       <td className="px-6 py-4 text-sm font-medium text-slate-900">
@@ -313,9 +325,7 @@ export default function App() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="max-w-xs">
-                          <p className="font-medium text-slate-900">
-                            {ticket.title}
-                          </p>
+                          <p className="font-medium text-slate-900">{ticket.title}</p>
                           <p className="mt-1 line-clamp-1 text-sm text-slate-500">
                             {ticket.description}
                           </p>
@@ -348,13 +358,8 @@ export default function App() {
           <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b px-6 py-4">
-              <h2 className="text-lg font-bold text-slate-900">
-                Create New Ticket
-              </h2>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
+              <h2 className="text-lg font-bold text-slate-900">Create New Ticket</h2>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -367,9 +372,7 @@ export default function App() {
                 </label>
                 <select
                   value={formData.category}
-                  onChange={(e) =>
-                    setFormData({ ...formData, category: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   className="w-full rounded-lg border border-slate-200 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 >
                   <option>Network</option>
@@ -386,9 +389,7 @@ export default function App() {
                 <input
                   type="text"
                   value={formData.title}
-                  onChange={(e) =>
-                    setFormData({ ...formData, title: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   placeholder="Brief description of the issue"
                   className="w-full rounded-lg border border-slate-200 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 />
@@ -400,9 +401,7 @@ export default function App() {
                 </label>
                 <textarea
                   value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Provide detailed information about the issue"
                   rows={4}
                   className="w-full rounded-lg border border-slate-200 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
@@ -457,6 +456,125 @@ export default function App() {
           onClick={() => setIsSidebarOpen(false)}
           className="fixed inset-0 z-40 bg-black/50 lg:hidden"
         />
+      )}
+
+      {/* ========== TICKET DETAIL PANEL ========== */}
+      {selectedTicket && (
+        <>
+          {/* Overlay */}
+          <div
+            onClick={() => setSelectedTicket(null)}
+            className="fixed inset-0 z-50 bg-black/30"
+          />
+
+          {/* Panel */}
+          <div className="fixed right-0 top-0 z-50 h-full w-full overflow-y-auto bg-white shadow-2xl sm:w-96">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b bg-slate-50 px-6 py-4">
+              <h2 className="text-lg font-bold text-slate-900">
+                Ticket #{selectedTicket.id}
+              </h2>
+              <button
+                onClick={() => setSelectedTicket(null)}
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="space-y-6 p-6">
+              {/* Title */}
+              <div>
+                <label className="text-xs font-semibold uppercase text-slate-500">
+                  Title
+                </label>
+                <p className="mt-1 text-lg font-semibold text-slate-900">
+                  {selectedTicket.title}
+                </p>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="text-xs font-semibold uppercase text-slate-500">
+                  Description
+                </label>
+                <p className="mt-1 text-sm text-slate-700">
+                  {selectedTicket.description}
+                </p>
+              </div>
+
+              {/* Category */}
+              <div>
+                <label className="text-xs font-semibold uppercase text-slate-500">
+                  Category
+                </label>
+                <p className="mt-1 text-sm text-slate-900">
+                  {selectedTicket.category}
+                </p>
+              </div>
+
+              {/* Priority */}
+              <div>
+                <label className="text-xs font-semibold uppercase text-slate-500">
+                  Priority
+                </label>
+                <div className="mt-2">
+                  <PriorityBadge priority={selectedTicket.priority} />
+                </div>
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="text-xs font-semibold uppercase text-slate-500">
+                  Current Status
+                </label>
+                <div className="mt-2">
+                  <StatusBadge status={selectedTicket.status} />
+                </div>
+              </div>
+
+              {/* Update Status */}
+              <div>
+                <label className="text-xs font-semibold uppercase text-slate-500">
+                  Update Status
+                </label>
+                <div className="mt-2 space-y-2">
+                  {["Open", "In Progress", "Resolved"].map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => updateTicketStatus(selectedTicket.id, status)}
+                      disabled={
+                        selectedTicket.status === status || isUpdatingStatus
+                      }
+                      className={`w-full rounded-lg border px-4 py-2 text-sm font-medium transition ${
+                        selectedTicket.status === status
+                          ? "border-blue-200 bg-blue-50 text-blue-600 cursor-not-allowed"
+                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      } disabled:cursor-not-allowed disabled:opacity-50`}
+                    >
+                      {isUpdatingStatus
+                        ? "Updating..."
+                        : selectedTicket.status === status
+                        ? `✓ ${status}`
+                        : `Mark as ${status}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Created Date */}
+              <div>
+                <label className="text-xs font-semibold uppercase text-slate-500">
+                  Created
+                </label>
+                <p className="mt-1 text-sm text-slate-700">
+                  {selectedTicket.created_at}
+                </p>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
